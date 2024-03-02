@@ -1,0 +1,21 @@
+{
+  "name": "dynasty",
+  "type": "module",
+  "version": "0.0.1",
+  "devDependencies": {
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "bun-types": "latest"
+  },
+  "bin": "cli/index.ts",
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": ["client/", "server/", "cli/"],
+  "dependencies": {
+    "arg": "^5.0.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-server-dom-webpack": "^0.0.1"
+  }
+}
