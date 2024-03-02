@@ -4,7 +4,7 @@ import { type Dirent } from "fs";
 export type APIHandler = (
   req: Request,
   params: Record<string, string>,
-) => Promise<Response | undefined>;
+) => Promise<Response>;
 
 export type Metadata = {
   title?: string;
@@ -34,12 +34,13 @@ export type Metadata = {
   };
 };
 
-export type GetMetadata = () => Promise<Metadata>;
+export type GetMetadata = (params: Record<string, string>) => Promise<Metadata>;
 
 export type Route = {
   filepath: string;
   getMetadata?: GetMetadata;
-  default?: React.FC<{ params: Record<string, string> }> | APIHandler;
+  default?: React.FC<{ params: Record<string, string> }>;
+  GET?: APIHandler;
   POST?: APIHandler;
   PUT?: APIHandler;
   PATCH?: APIHandler;
@@ -55,7 +56,7 @@ export type MatchableRoute = {
 
 export type MatchedRoute = {
   matched: MatchableRoute;
-  match: RegExpMatchArray;
+  regexes: RegExpMatchArray;
 };
 
 export type RouteNode = {
@@ -64,20 +65,20 @@ export type RouteNode = {
   children: Record<string, RouteNode>;
 };
 
-export type RouteIndex = {
-  tree: RouteNode;
+export type RouterIndex = {
+  node: RouteNode;
   matchableRoutes: MatchableRoute[];
   bundleEntryPoints: string[];
 };
 
 type BuildRouterIndexParameters = {
   directory: string;
-  currentPath: string[];
-  matchableRoutes: MatchableRoute[];
-  node: RouteNode;
-  parameters: number;
-  depth: number;
-  bundleEntryPoints: string[];
+  currentPath?: string[];
+  matchableRoutes?: MatchableRoute[];
+  node?: RouteNode;
+  parameters?: number;
+  depth?: number;
+  bundleEntryPoints?: string[];
 };
 
 export const buildRouterIndex = async ({
@@ -88,7 +89,7 @@ export const buildRouterIndex = async ({
   parameters = 0,
   depth = 0,
   bundleEntryPoints = [],
-}: BuildRouterIndexParameters) => {
+}: BuildRouterIndexParameters): Promise<RouterIndex> => {
   if (depth > 10) {
     console.warn(
       "buildRouterIndex: Maximum depth reached, returning early. Some routes may not be built.",
@@ -180,3 +181,64 @@ export const buildRouterIndex = async ({
 
   return { matchableRoutes, node, bundleEntryPoints };
 };
+
+const matchRoute = (
+  path: string,
+  matchableRoutes: MatchableRoute[],
+): MatchedRoute | undefined => {
+  const pathLength = path.split("/").filter((p) => p !== "").length;
+  const viable = matchableRoutes
+    .filter((r) => r.pathLength === pathLength) // only match routes with the same number of path segments
+    .sort((a, b) => a.parameters - b.parameters); // try to match routes with the least params first
+
+  for (const route of viable) {
+    const match = route.regex.exec(path);
+    if (match) {
+      return { matched: route, regexes: match };
+    }
+  }
+};
+
+export const hydrateMatchableRoutes = async (
+  matchableRoutes: MatchableRoute[],
+) => {
+  await Promise.all(
+    matchableRoutes.map(async (matchableRoute) => {
+      const route: Route = await import(matchableRoute.matchable.filepath);
+      if ((route.default || route.getMetadata) && route.GET) {
+        throw new Error(
+          "hydrateMatchableRoutes: Route cannot have both a default export and a GET handler",
+        );
+      }
+    }),
+  );
+};
+
+export const createRouter = async (
+  directory: string,
+  options: {
+    routerIndex?: RouterIndex;
+  },
+): Promise<(path: string) => Promise<MatchedRoute | undefined>> => {
+  const routes =
+    options?.routerIndex ?? (await buildRouterIndex({ directory }));
+  const routesCache = new Map<string, MatchedRoute | undefined>();
+  return async (path: string) => {
+    if (routesCache.has(path)) {
+      return routesCache.get(path);
+    }
+
+    console.time("Match route: " + path);
+    const matchedRoute = matchRoute(
+      path.startsWith("/") ? path.slice(1) : path,
+      routes.matchableRoutes,
+    );
+    console.timeEnd("Match route: " + path);
+
+    routesCache.set(path, matchedRoute);
+
+    return matchedRoute;
+  };
+};
+
+export type Router = Awaited<ReturnType<typeof createRouter>>;
