@@ -1,5 +1,12 @@
 # Dynasty
 
+## Features
+
+- [x] React server components
+- [x] Server-side rendering
+- [] Server actions
+- [] Helps you find a girlfriend
+
 To install dependencies:
 
 ```bash
