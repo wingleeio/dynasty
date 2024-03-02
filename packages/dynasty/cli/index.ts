@@ -10,7 +10,7 @@ const args = arg({
   "-v": "--version",
 });
 
-if (args["--help"]) {
+if (args["--help"] && !args._.length) {
   console.log(
     [
       `Dynasty ${__package__.version}`,
@@ -28,7 +28,7 @@ if (args["--help"]) {
   process.exit(0);
 }
 
-if (args["--version"]) {
+if (args["--version"] && !args._.length) {
   console.log(__package__.version);
   process.exit(0);
 }

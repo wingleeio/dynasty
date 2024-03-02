@@ -3,6 +3,7 @@
 import React, {
   type PropsWithChildren,
   startTransition,
+  // @ts-expect-error - no typings yet
   use,
   useContext,
   useEffect,

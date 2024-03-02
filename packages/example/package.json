@@ -1,0 +1,19 @@
+{
+  "name": "example",
+  "type": "module",
+  "scripts": {
+    "dev": "dynasty dev",
+    "build": "dynasty build"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "dynasty": "link:dynasty"
+  }
+}

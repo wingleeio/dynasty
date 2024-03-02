@@ -95,9 +95,7 @@ export const buildRouterIndex = async ({
       "buildRouterIndex: Maximum depth reached, returning early. Some routes may not be built.",
     );
   }
-
   const directoryEntities = await readdir(directory, { withFileTypes: true });
-
   const directoryEntityPairs: [Dirent[], Dirent[]] = [[], []];
   const [files, directories] = directoryEntities.reduce(
     ([files, directories], file) => {
@@ -110,18 +108,16 @@ export const buildRouterIndex = async ({
     },
     directoryEntityPairs,
   );
-
-  const directoryPromises = directories.map((directory) => {
-    const nextPath = [...currentPath, directory.name];
-    const nextNode = node.children[directory.name] ?? { children: {} };
-    if (directory.name.match(/^\[(.+)\]$/)) {
+  const directoryPromises = directories.map((dir) => {
+    const nextPath = [...currentPath, dir.name];
+    const nextNode = node.children[dir.name] ?? { children: {} };
+    if (dir.name.match(/^\[(.+)\]$/)) {
       nextNode.parameter = true;
-      nextPath[nextPath.length - 1] =
-        `(?<${directory.name.slice(1, -1)}>[^/]+)`;
+      nextPath[nextPath.length - 1] = `(?<${dir.name.slice(1, -1)}>[^/]+)`;
     }
-    node.children[directory.name] = nextNode;
+    node.children[dir.name] = nextNode;
     return buildRouterIndex({
-      directory: `${directory}/${directory.name}`,
+      directory: `${directory}/${dir.name}`,
       matchableRoutes: matchableRoutes,
       node: nextNode,
       currentPath: nextPath,
@@ -187,9 +183,10 @@ const matchRoute = (
   matchableRoutes: MatchableRoute[],
 ): MatchedRoute | undefined => {
   const pathLength = path.split("/").filter((p) => p !== "").length;
+
   const viable = matchableRoutes
-    .filter((r) => r.pathLength === pathLength) // only match routes with the same number of path segments
-    .sort((a, b) => a.parameters - b.parameters); // try to match routes with the least params first
+    .filter((r) => r.pathLength === pathLength)
+    .sort((a, b) => a.parameters - b.parameters);
 
   for (const route of viable) {
     const match = route.regex.exec(path);
@@ -205,29 +202,28 @@ export const hydrateMatchableRoutes = async (
   await Promise.all(
     matchableRoutes.map(async (matchableRoute) => {
       const route: Route = await import(matchableRoute.matchable.filepath);
+
       if ((route.default || route.getMetadata) && route.GET) {
         throw new Error(
           "hydrateMatchableRoutes: Route cannot have both a default export and a GET handler",
         );
       }
+
+      matchableRoute.matchable = route;
     }),
   );
 };
 
 export const createRouter = async (
   directory: string,
-  options: {
-    routerIndex?: RouterIndex;
-  },
+  routerIndex?: RouterIndex,
 ): Promise<(path: string) => Promise<MatchedRoute | undefined>> => {
-  const routes =
-    options?.routerIndex ?? (await buildRouterIndex({ directory }));
+  const routes = routerIndex ?? (await buildRouterIndex({ directory }));
   const routesCache = new Map<string, MatchedRoute | undefined>();
   return async (path: string) => {
     if (routesCache.has(path)) {
       return routesCache.get(path);
     }
-
     console.time("Match route: " + path);
     const matchedRoute = matchRoute(
       path.startsWith("/") ? path.slice(1) : path,

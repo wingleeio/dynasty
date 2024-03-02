@@ -14,6 +14,7 @@ export const renderReactServerComponent = async ({
 }: RenderReactServerComponentParameters): Promise<Response> => {
   const route = matchedRoute.matched.matchable;
   const groups = matchedRoute.regexes.groups;
+
   if (!route.default) {
     throw new Error("No default export found for the matched module");
   }
