@@ -224,6 +224,7 @@ export const createRouter = async (
     if (routesCache.has(path)) {
       return routesCache.get(path);
     }
+    // console.log(JSON.stringify(routes, null, 2));
     console.time("Match route: " + path);
     const matchedRoute = matchRoute(
       path.startsWith("/") ? path.slice(1) : path,

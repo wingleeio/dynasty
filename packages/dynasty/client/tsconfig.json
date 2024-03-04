@@ -4,6 +4,7 @@
     "jsx": "react",
     "module": "esnext",
     "target": "esnext",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["react/canary", "react-dom/canary", "bun-types"]
   }
 }

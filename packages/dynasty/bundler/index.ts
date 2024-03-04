@@ -1,5 +1,8 @@
 import path from "path";
 import fs from "fs/promises";
+import { ServerPlugin } from "./rsc-server-plugin-babel";
+import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
+import { ClientPlugin } from "./rsc-client-plugin-babel";
 
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
@@ -42,7 +45,6 @@ export const bundle = async ({
   }
 
   await fs.mkdir(path.join(outPath, "server"));
-  await fs.mkdir(path.join(outPath, "server", "routes"));
   const runDir = process.cwd().split(path.sep);
   const dynastyDir = (await Bun.resolve("dynasty", ".")).split(path.sep);
 
@@ -55,30 +57,7 @@ export const bundle = async ({
   }
 
   const clientEntry = path.resolve(import.meta.dir, "../client/index.tsx");
-  const clientRouter = path.resolve(import.meta.dir, "../client/router.tsx");
-  const hasher = new Bun.CryptoHasher("blake2b256");
-
-  const client = await Bun.build({
-    entrypoints: [
-      clientEntry,
-      ...Array.from(clientDependencies.values()).map((dep) => dep.entrypoint),
-    ],
-    target: "browser",
-    sourcemap: "external",
-    splitting: true,
-    format: "esm",
-    root: commonDirPath,
-    outdir: clientOutPath,
-    minify: !noMinify,
-    publicPath: "./",
-    define: {
-      "process.env.NODE_ENV": `"${environment}"`,
-    },
-  });
-  if (!client.success) {
-    console.error(client.logs);
-    return;
-  }
+  const clientManifest: ClientManifest = {};
 
   const clientDepsMap = [
     { entrypoint: clientEntry, exports: ["default"] },
@@ -107,105 +86,29 @@ export const bundle = async ({
   );
   if (isDebug) console.log(clientDepsMap);
 
-  const manifest = client.outputs.reduce(
-    (acc, output) => {
-      const fileName = output.path.slice(clientOutPath.length);
-      const withoutExtension = fileName.split(".").slice(0, -1).join(".");
-
-      if (withoutExtension in clientDepsMap) {
-        const dep = clientDepsMap[withoutExtension];
-
-        switch (dep.path) {
-          case clientEntry:
-            acc["client-entry"] = {
-              id: fileName,
-              chunks: [fileName],
-              name: "default",
-            };
-            break;
-          case clientRouter:
-            acc["client-router"] = {
-              id: fileName,
-              chunks: [fileName],
-              name: "default",
-            };
-          default:
-            for (const exp of dep.exports) {
-              acc[`${dep.fileName}#${exp}`] = {
-                id: fileName,
-                chunks: [fileName],
-                name: exp,
-              };
-            }
-        }
-      }
-
-      return acc;
-    },
-    {} as Record<string, { id: string; chunks: string[]; name: string }>,
-  );
-
-  if (isDebug) console.log("manifest", manifest);
-  await Bun.write(
-    path.join(outPath, "manifest.json"),
-    JSON.stringify(manifest, null, 2),
-  );
-
+  const serverManifest: ServerManifest = {};
+  const serverReferencesMap = new Map();
+  const clientReferencesMap = new Map();
   const serverRoutes = await Bun.build({
-    entrypoints,
+    entrypoints: [
+      ...entrypoints,
+      ...Array.from(clientDependencies.values()).map((dep) => dep.entrypoint),
+    ],
     target: "bun",
-    sourcemap: "none",
+    sourcemap: "external",
     splitting: true,
     format: "esm",
-    outdir: path.join(outPath, "server", "routes"),
-    minify: environment === "production",
+    outdir: path.join(outPath, "server"),
+    minify: true,
     define: {
       "process.env.NODE_ENV": `"${environment}"`,
     },
     plugins: [
-      {
-        name: "rsc-server",
-        setup(build) {
-          build.onLoad({ filter: /\.(ts|tsx)$/ }, async (args) => {
-            const code = await Bun.file(args.path).text();
-            if (
-              !code.startsWith(`"use client"`) &&
-              !code.startsWith(`'use client'`)
-            ) {
-              // if not a client component, just return the code and let it be bundled
-              return {
-                contents: code,
-                loader: "tsx",
-              };
-            }
-
-            // if it is a client component, return a reference to the client bundle
-            const outputKey = `/${args.path.slice(commonDirPath.length)}`;
-            // const outputKey = args.path.slice(appRoot.length)
-
-            if (isDebug) console.log("outputKey", outputKey);
-
-            const moduleExports = transpiler.scan(code).exports;
-            if (isDebug) console.log("exports", moduleExports);
-
-            let refCode = "";
-            for (const exp of moduleExports) {
-              if (exp === "default") {
-                refCode += `\nexport default { $$typeof: Symbol.for("react.client.reference"), $$async: false, $$id: "${outputKey}#default", name: "default" }`;
-              } else {
-                refCode += `\nexport const ${exp} = { $$typeof: Symbol.for("react.client.reference"), $$async: false, $$id: "${outputKey}#${exp}", name: "${exp}" }`;
-              }
-            }
-
-            if (isDebug) console.log("generated code", refCode);
-
-            return {
-              contents: refCode,
-              loader: "js",
-            };
-          });
-        },
-      },
+      new ServerPlugin({
+        clientReferencesMap,
+        serverReferencesMap,
+        clientManifest,
+      }),
     ],
   });
 
@@ -214,8 +117,47 @@ export const bundle = async ({
     throw new Error("server routes build failed");
   }
 
+  const client = await Bun.build({
+    entrypoints: [
+      clientEntry,
+      ...Array.from(clientDependencies.values()).map((dep) => dep.entrypoint),
+    ],
+    target: "browser",
+    sourcemap: "none",
+    splitting: true,
+    format: "esm",
+    outdir: path.join(outPath, "client"),
+    minify: !noMinify,
+    publicPath: "./",
+    define: {
+      "process.env.NODE_ENV": `"${environment}"`,
+    },
+    plugins: [
+      new ClientPlugin({
+        serverManifest,
+        serverReferencesMap,
+      }),
+    ],
+  });
+
+  if (!client.success) {
+    console.error(client.logs);
+    return;
+  }
+
+  await Bun.write(
+    path.join(outPath, "client/manifest.json"),
+    JSON.stringify(clientManifest, null, 2),
+  );
+
+  await Bun.write(
+    path.join(outPath, "server/manifest.json"),
+    JSON.stringify(serverManifest, null, 2),
+  );
+
   return {
-    manifest,
+    clientManifest,
+    serverManifest,
   };
 };
 
@@ -233,10 +175,6 @@ type ResolveClientComponentDependenciesParameters = {
   originalEntry?: string | undefined;
   depth?: number;
 };
-
-function isClientComponent(code: string) {
-  return code.startsWith('"use client"') || code.startsWith("'use client'");
-}
 
 const resolveClientComponentDependencies = async ({
   entrypoints,
@@ -266,9 +204,8 @@ const resolveClientComponentDependencies = async ({
     const file = Bun.file(entrypoint);
     const contents = await file.text();
     const dependencyScan = transpiler.scan(contents);
-    if (isClientComponent(contents)) {
-      clientDependencies.add({ entrypoint, exports: dependencyScan.exports });
-    }
+
+    clientDependencies.add({ entrypoint, exports: dependencyScan.exports });
     processedFiles.add(entrypoint);
 
     const parent = entrypoint.split("/").slice(0, -1).join("/");

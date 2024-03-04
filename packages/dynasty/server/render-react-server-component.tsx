@@ -1,11 +1,11 @@
-// @ts-expect-error - doesnt have any types, at least that i could find
 import { renderToPipeableStream } from "react-server-dom-webpack/server.node";
 import { MatchedRoute } from "./router";
 import stream from "stream";
+import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
 
 type RenderReactServerComponentParameters = {
   matchedRoute: MatchedRoute;
-  manifest: any;
+  manifest: ClientManifest;
 };
 
 export const renderReactServerComponent = async ({

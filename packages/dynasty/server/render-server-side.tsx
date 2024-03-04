@@ -1,12 +1,12 @@
 import { StrictMode } from "react";
 import { renderToReadableStream } from "react-dom/server";
 import { Route } from "./router";
-import { Manifest } from "../bundler";
+import { ClientManifest } from "react-server-dom-webpack";
 
 type RenderServerSideParameters = {
   route: Route;
   params: Record<string, string>;
-  manifest: Manifest;
+  manifest: ClientManifest;
 };
 
 export const renderServerSide = async ({
@@ -21,9 +21,8 @@ export const renderServerSide = async ({
   // TODO: Implement getMetadata
   const hasMetadata = "getMetadata" in route && route.getMetadata;
   const metadata = hasMetadata ? await route.getMetadata!(params) : {};
-
-  const clientEntryScript = manifest["client-entry"]?.chunks[0];
-  const clientRouterScript = manifest["client-router"]?.chunks[0];
+  // const clientEntryScript = manifest["client-entry"]?.chunks[0];
+  // const clientRouterScript = manifest["client-router"]?.chunks[0];
 
   const mount = (
     <StrictMode>
@@ -101,7 +100,7 @@ export const renderServerSide = async ({
               ].join("\n"),
             }}
           />
-          <script type="module" src={clientEntryScript} />
+          <script type="module" src="/dynasty/client/index.js" />
         </body>
       </html>
     </StrictMode>

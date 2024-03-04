@@ -24,21 +24,21 @@ const args = arg({
 const outDirectory = path.resolve(args["--out-dir"] || ".dynasty");
 const publicDirectory = path.resolve(args["--public-dir"] || "./src/public");
 const pagesDirectory = path.resolve(args["--pages-dir"] || "./src/pages");
-const serverComponentsDirectory = path.resolve(
-  path.join(outDirectory, "server/routes"),
+const serverComponentsPagesDirectory = path.resolve(
+  path.join(outDirectory, "server/pages"),
 );
 const pagesRouterIndex = await buildRouterIndex({
   directory: pagesDirectory,
 });
 
-const { manifest } = (await bundle({
+const { clientManifest, serverManifest } = (await bundle({
   entrypoints: pagesRouterIndex.bundleEntryPoints,
   outDir: outDirectory,
   publicDir: publicDirectory,
 }))!;
 
 const serverComponentsRouterIndex = await buildRouterIndex({
-  directory: serverComponentsDirectory,
+  directory: serverComponentsPagesDirectory,
 });
 
 await hydrateMatchableRoutes(pagesRouterIndex.matchableRoutes);
@@ -46,14 +46,15 @@ await hydrateMatchableRoutes(serverComponentsRouterIndex.matchableRoutes);
 
 const pagesRouter = await createRouter(pagesDirectory, pagesRouterIndex);
 const serverComponentsRouter = await createRouter(
-  serverComponentsDirectory,
+  serverComponentsPagesDirectory,
   serverComponentsRouterIndex,
 );
 
 createApplication({
   pagesRouter,
   serverComponentsRouter,
-  manifest,
+  clientManifest,
+  serverManifest,
   publicDirectory: path.resolve(path.join(outDirectory, "client")),
   port: args["--port"] || 1337,
 });
