@@ -84,7 +84,7 @@ export class ClientPlugin {
                     t.identifier(`callServer`),
                   ),
                 ],
-                t.stringLiteral("dynasty/client/router"),
+                t.stringLiteral("dynasty.js"),
               ),
               ...exportNames.map((exportName) => {
                 const serverModuleId = moduleId.toString().replace("src/", "");

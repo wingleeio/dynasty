@@ -1,5 +1,5 @@
 {
-  "name": "@dynasty/monorepo",
+  "name": "dynasty",
   "version": "0.0.1",
   "description": "A simple, lightweight, and easy to use RSC Framework for Bun.",
   "workspaces": ["packages/*"]

@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import { ServerPlugin } from "./rsc-server-plugin-babel";
 import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
 import { ClientPlugin } from "./rsc-client-plugin-babel";
+import Postcss from "postcss";
 
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
@@ -33,27 +34,29 @@ export const bundle = async ({
   }
   await fs.mkdir(outPath, { recursive: true });
   const ignoredClientDependencies = new Set<string>([]);
-  const clientDependencies = await resolveComponentDependencies({
+  const [clientDependencies, cssImports] = await resolveComponentDependencies({
     entrypoints,
     ignoredClientDependencies,
     client: true,
   });
 
-  const serverDependencies = await resolveComponentDependencies({
+  const [serverDependencies] = await resolveComponentDependencies({
     entrypoints,
     ignoredClientDependencies,
     client: false,
   });
 
   const clientOutPath = path.resolve(outPath, "client");
+  const cssOutDir = path.join(outPath, "client", "css");
   await fs.mkdir(clientOutPath, { recursive: true });
+  await fs.mkdir(cssOutDir);
   if (publicDir && (await fs.exists(publicDir))) {
     await fs.cp(publicDir, clientOutPath, { recursive: true });
   }
 
   await fs.mkdir(path.join(outPath, "server"));
   const runDir = process.cwd().split(path.sep);
-  const dynastyDir = (await Bun.resolve("dynasty", ".")).split(path.sep);
+  const dynastyDir = (await Bun.resolve("dynasty.js", ".")).split(path.sep);
 
   let commonDirPath = "";
   for (let i = 0; i < runDir.length; i++) {
@@ -62,12 +65,40 @@ export const bundle = async ({
     }
     commonDirPath += runDir[i] + path.sep;
   }
+
+  const postcssPlugins: Postcss.AcceptedPlugin[] = [];
+
+  if (await fs.exists("./postcss.config.js")) {
+    const config = require("./postcss.config.js");
+    Object.entries(config.plugins).forEach(([name, options]) => {
+      const plugin = require(name);
+      postcssPlugins.push(plugin(options));
+    });
+  }
+
+  const cssFiles = Array.from(Object.values(cssImports)).flat();
+  const postcss = Postcss(postcssPlugins);
+  const cssMap = new Map<string, string>();
+  const hasher = new Bun.CryptoHasher("blake2b256");
+  for (const cssFile of cssFiles) {
+    const css = await Bun.file(cssFile).text();
+    const hash = hasher.digest("base64").slice(0, 24);
+    const cssFileOutPath = path.join(cssOutDir, `${hash}.css`);
+    const result = await postcss.process(css, {
+      from: cssFile,
+      to: cssFileOutPath,
+    });
+    await Bun.write(cssFileOutPath, result.css);
+    cssMap.set(cssFile, cssFileOutPath.slice(clientOutPath.length));
+  }
+
   const clientEntry = path.resolve(import.meta.dir, "../client/index.tsx");
   const clientManifest: ClientManifest = {};
 
   const serverManifest: ServerManifest = {};
   const serverReferencesMap = new Map();
   const clientReferencesMap = new Map();
+
   const server = await Bun.build({
     entrypoints: [
       ...entrypoints,
@@ -117,13 +148,45 @@ export const bundle = async ({
         serverManifest,
         serverReferencesMap,
       }),
+      {
+        name: "postcss",
+        setup(build) {
+          build.onLoad({ filter: /\.css$/ }, async (args) => {
+            if (!cssMap.has(args.path))
+              throw new Error("Failed to reslove css import");
+            return {
+              contents: cssMap.get(args.path) ?? "",
+              loader: "text",
+            };
+          });
+        },
+      },
     ],
   });
 
+  await Bun.plugin({
+    name: "dynasty-css-bundle",
+    async setup(build) {
+      build.onLoad({ filter: /\.css$/ }, async (args) => {
+        const cssPath = cssMap.has(args.path)
+          ? cssMap.get(args.path)
+          : args.path;
+        return {
+          contents: `export default '${cssPath}'`,
+          loader: "js",
+        };
+      });
+    },
+  });
   if (!client.success) {
     console.error(client.logs);
     return;
   }
+
+  await Bun.write(
+    path.join(outPath, "server/css-map.json"),
+    JSON.stringify(Array.from(cssMap.entries()), null, 2),
+  );
 
   await Bun.write(
     path.join(outPath, "server/client-manifest.json"),
@@ -152,6 +215,7 @@ type ResolveClientComponentDependenciesParameters = {
   clientDependencies?: Set<ClientDependency>;
   resolutionCache?: Map<string, string>;
   processedFiles?: Set<string>;
+  cssImports?: Record<string, string[]>;
   originalEntry?: string | undefined;
   depth?: number;
   client: boolean;
@@ -172,15 +236,18 @@ const resolveComponentDependencies = async ({
   clientDependencies = new Set(),
   resolutionCache = new Map(),
   processedFiles = new Set(),
+  cssImports = {},
   originalEntry = undefined,
   depth = 0,
   client = true,
-}: ResolveClientComponentDependenciesParameters) => {
+}: ResolveClientComponentDependenciesParameters): Promise<
+  [Set<ClientDependency>, Record<string, string[]>]
+> => {
   if (depth > 25) {
     console.warn(
       "returning early from resolveClientComponentDependencies. Too many levels of dependency.",
     );
-    return clientDependencies;
+    return [clientDependencies, cssImports];
   }
 
   for (const entrypoint of entrypoints) {
@@ -208,6 +275,12 @@ const resolveComponentDependencies = async ({
       .filter((dependency) => !isExternalImport(dependency.path))
       .map(async (dependency) => {
         try {
+          if (dependency.path.endsWith(".css")) {
+            if (!cssImports[entryKey]) cssImports[entryKey] = [];
+            const resolved = await Bun.resolve(dependency.path, parent);
+            cssImports[entryKey].push(resolved);
+            return;
+          }
           let resolved = resolutionCache.get(dependency.path);
           if (!resolved) {
             resolved = await Bun.resolve(dependency.path, parent);
@@ -229,6 +302,7 @@ const resolveComponentDependencies = async ({
         clientDependencies,
         resolutionCache,
         processedFiles,
+        cssImports,
         originalEntry: entryKey,
         depth: depth + 1,
         client,
@@ -236,5 +310,5 @@ const resolveComponentDependencies = async ({
     }
   }
 
-  return clientDependencies;
+  return [clientDependencies, cssImports];
 };

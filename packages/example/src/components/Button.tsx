@@ -1,6 +1,8 @@
 "use client";
+
 import { test } from "../utils/test";
-import { useRouter } from "dynasty/client/router";
+import { useRouter } from "dynasty.js";
+
 export const Button = () => {
   const { navigate } = useRouter();
   return (

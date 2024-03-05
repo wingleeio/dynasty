@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import path from "path";
 import arg from "arg";
 
@@ -68,3 +70,5 @@ socket.on("open", () => {
   socket.send("build:complete");
   socket.close();
 });
+
+console.log("Server running at http://localhost:1337/");
