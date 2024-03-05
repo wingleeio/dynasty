@@ -9,7 +9,7 @@ export default async () => {
   const test: string = await new Promise((resolve) =>
     setTimeout(() => {
       resolve("Hello world!");
-    }, 1000),
+    }, 1),
   );
   return (
     <div>

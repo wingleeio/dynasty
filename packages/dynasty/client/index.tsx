@@ -15,7 +15,6 @@ const __bun__module_map__ = new Map();
 global["__webpack_chunk_load__"] = async function (moduleId: string) {
   const module = await import(moduleId);
   __bun__module_map__.set(moduleId, module);
-  console.log(module);
   return module;
 };
 

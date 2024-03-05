@@ -87,9 +87,23 @@ export class ClientPlugin {
                 t.stringLiteral("dynasty/client/router"),
               ),
               ...exportNames.map((exportName) => {
-                serverManifest["/" + moduleId + `#${exportName}`] = {
-                  id: "/" + moduleId,
-                  chunks: ["/" + moduleId],
+                const serverModuleId = moduleId.toString().replace("src/", "");
+                serverManifest[
+                  "/" +
+                    serverModuleId +
+                    `#${exportName}`
+                      .replace(".tsx", ".js")
+                      .replace(".ts", ".js")
+                ] = {
+                  id:
+                    "/" +
+                    serverModuleId.replace(".tsx", ".js").replace(".ts", ".js"),
+                  chunks: [
+                    "/" +
+                      serverModuleId
+                        .replace(".tsx", ".js")
+                        .replace(".ts", ".js"),
+                  ],
                   name: exportName,
                 };
                 return t.exportNamedDeclaration(
@@ -97,7 +111,7 @@ export class ClientPlugin {
                     t.variableDeclarator(
                       t.identifier(exportName),
                       t.callExpression(t.identifier(`createServerReference`), [
-                        t.stringLiteral(`/${moduleId}#${exportName}`),
+                        t.stringLiteral(`/${serverModuleId}#${exportName}`),
                         t.identifier(`callServer`),
                       ]),
                     ),

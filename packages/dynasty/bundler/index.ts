@@ -3,7 +3,6 @@ import fs from "fs/promises";
 import { ServerPlugin } from "./rsc-server-plugin-babel";
 import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
 import { ClientPlugin } from "./rsc-client-plugin-babel";
-import { BuildArtifact } from "bun";
 
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
@@ -20,7 +19,6 @@ type BundleParameters = {
 
 const environment = process.env.NODE_ENV || "development";
 const noMinify = process.env.NO_MINIFY === "true";
-const isDebug = process.env.DEBUG === "true";
 
 export const bundle = async ({
   entrypoints,
@@ -128,12 +126,12 @@ export const bundle = async ({
   }
 
   await Bun.write(
-    path.join(outPath, "client/manifest.json"),
+    path.join(outPath, "server/client-manifest.json"),
     JSON.stringify(clientManifest, null, 2),
   );
 
   await Bun.write(
-    path.join(outPath, "server/manifest.json"),
+    path.join(outPath, "server/server-manifest.json"),
     JSON.stringify(serverManifest, null, 2),
   );
 

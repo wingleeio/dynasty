@@ -1,22 +1,13 @@
 # Dynasty
 
+## About
+
+Dynasty is a React Server Component (RSC) framework that aims to provide all the functionality of RSC's to the [Bun](https://bun.sh) ecosystem.
+
 ## Features
 
 - [x] React server components
 - [x] Server-side rendering
-- [ ] Server actions
+- [x] Server actions
+- [ ] Elysia back end
 - [ ] Helps you find a girlfriend
-
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.0.5. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

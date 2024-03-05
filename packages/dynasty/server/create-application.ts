@@ -4,6 +4,12 @@ import { renderReactServerComponent } from "./render-react-server-component";
 import { renderServerSide } from "./render-server-side";
 import { Router } from "./router";
 import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
+import {
+  decodeReply,
+  renderToPipeableStream,
+} from "react-server-dom-webpack/server.node";
+import stream from "stream";
+import { handleServerAction } from "./handle-server-action";
 
 type CreateApplicationParameters = {
   pagesRouter: Router;
@@ -29,6 +35,10 @@ export const createApplication = ({
     fetch: async (req) => {
       const url = new URL(req.url);
       const pathname = url.pathname;
+
+      if (req.headers.get("x-rsc-action")) {
+        return handleServerAction(req, serverManifest, clientManifest);
+      }
 
       if (pathname === "/__dynasty__") {
         const location = url.searchParams.get("location");
