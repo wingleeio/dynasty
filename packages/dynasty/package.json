@@ -1,5 +1,5 @@
 {
-  "name": "dynasty",
+  "name": "@dynasty/core",
   "type": "module",
   "version": "0.0.1",
   "main": "./cli/index.ts",
@@ -12,7 +12,7 @@
     "bun-types": "latest"
   },
   "bin": {
-    "dynasty": "bunbun ./cli/index.ts"
+    "dynasty": "bun ./cli/index.ts"
   },
   "files": ["client/", "server/", "cli/"],
   "dependencies": {

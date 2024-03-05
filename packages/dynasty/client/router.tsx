@@ -10,10 +10,10 @@ import React, {
   useState,
   createContext,
 } from "react";
-// @ts-expect-error - no typings yet
 import {
   createFromFetch,
   encodeReply,
+  // @ts-expect-error - no typings yet
 } from "react-server-dom-webpack/client.browser";
 // @ts-expect-error - no typings yet
 import type { ReactServerValue } from "react-server-dom-webpack";

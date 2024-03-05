@@ -161,6 +161,11 @@ function isClientComponent(code: string) {
   return code.startsWith('"use client"') || code.startsWith("'use client'");
 }
 
+function isExternalImport(importPath: string): boolean {
+  // This will return true if the import path does not start with './' or '../'
+  return !importPath.startsWith(".") && !importPath.startsWith("..");
+}
+
 const resolveComponentDependencies = async ({
   entrypoints,
   ignoredClientDependencies,
@@ -199,8 +204,9 @@ const resolveComponentDependencies = async ({
 
     const parent = entrypoint.split("/").slice(0, -1).join("/");
 
-    const dependenciesPromises = dependencyScan.imports.map(
-      async (dependency) => {
+    const dependenciesPromises = dependencyScan.imports
+      .filter((dependency) => !isExternalImport(dependency.path))
+      .map(async (dependency) => {
         try {
           let resolved = resolutionCache.get(dependency.path);
           if (!resolved) {
@@ -210,8 +216,7 @@ const resolveComponentDependencies = async ({
         } catch (e) {
           console.warn(e);
         }
-      },
-    );
+      });
 
     const dependencies = (await Promise.all(dependenciesPromises)).filter(
       Boolean,

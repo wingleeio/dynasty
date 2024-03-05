@@ -11,7 +11,7 @@
     "bun-types": "latest"
   },
   "dependencies": {
-    "dynasty": "link:dynasty",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@dynasty/core": "link:@dynasty/core"
   }
 }
