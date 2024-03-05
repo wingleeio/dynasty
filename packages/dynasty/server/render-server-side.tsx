@@ -21,8 +21,6 @@ export const renderServerSide = async ({
   // TODO: Implement getMetadata
   const hasMetadata = "getMetadata" in route && route.getMetadata;
   const metadata = hasMetadata ? await route.getMetadata!(params) : {};
-  // const clientEntryScript = manifest["client-entry"]?.chunks[0];
-  // const clientRouterScript = manifest["client-router"]?.chunks[0];
 
   const mount = (
     <StrictMode>
@@ -38,20 +36,6 @@ export const renderServerSide = async ({
           <script
             dangerouslySetInnerHTML={{
               __html: [
-                "global = window;",
-                "",
-                "const __bun__module_map__ = new Map();",
-                "",
-                "global.__webpack_chunk_load__ = async function(moduleId) {",
-                "    const mod = await import(moduleId);",
-                "    __bun__module_map__.set(moduleId, mod);",
-                "    return mod;",
-                "};",
-                "",
-                "global.__webpack_require__ = function(moduleId) {",
-                '    console.log("require", moduleId)',
-                "    return __bun__module_map__.get(moduleId);",
-                "};",
                 ...(process.env.DYNASTY_DEV
                   ? [
                       "const requestUrl = 'ws://localhost:21818/';",
@@ -100,13 +84,14 @@ export const renderServerSide = async ({
               ].join("\n"),
             }}
           />
-          <script type="module" src="/dynasty/client/index.js" />
         </body>
       </html>
     </StrictMode>
   );
 
-  const stream = await renderToReadableStream(mount);
+  const stream = await renderToReadableStream(mount, {
+    bootstrapModules: ["/dynasty/client/index.js"],
+  });
 
   return new Response(stream, {
     headers: {

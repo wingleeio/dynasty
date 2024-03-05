@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import { ServerPlugin } from "./rsc-server-plugin-babel";
 import { ClientManifest, ServerManifest } from "react-server-dom-webpack";
 import { ClientPlugin } from "./rsc-client-plugin-babel";
+import { BuildArtifact } from "bun";
 
 const transpiler = new Bun.Transpiler({ loader: "tsx" });
 
@@ -34,10 +35,18 @@ export const bundle = async ({
   }
   await fs.mkdir(outPath, { recursive: true });
   const ignoredClientDependencies = new Set<string>([]);
-  const clientDependencies = await resolveClientComponentDependencies({
+  const clientDependencies = await resolveComponentDependencies({
     entrypoints,
     ignoredClientDependencies,
+    client: true,
   });
+
+  const serverDependencies = await resolveComponentDependencies({
+    entrypoints,
+    ignoredClientDependencies,
+    client: false,
+  });
+
   const clientOutPath = path.resolve(outPath, "client");
   await fs.mkdir(clientOutPath, { recursive: true });
   if (publicDir && (await fs.exists(publicDir))) {
@@ -55,44 +64,16 @@ export const bundle = async ({
     }
     commonDirPath += runDir[i] + path.sep;
   }
-
   const clientEntry = path.resolve(import.meta.dir, "../client/index.tsx");
   const clientManifest: ClientManifest = {};
-
-  const clientDepsMap = [
-    { entrypoint: clientEntry, exports: ["default"] },
-    ...Array.from(clientDependencies.values()),
-  ].reduce(
-    (acc, dep) => {
-      const fileName = dep.entrypoint.slice(commonDirPath.length - 1);
-      const withoutExtension = fileName.split(".").slice(0, -1).join(".");
-      acc[withoutExtension] = {
-        path: dep.entrypoint,
-        fileName,
-        withoutExtension,
-        exports: dep.exports,
-      };
-      return acc;
-    },
-    {} as Record<
-      string,
-      {
-        path: string;
-        fileName: string;
-        withoutExtension: string;
-        exports: string[];
-      }
-    >,
-  );
-  if (isDebug) console.log(clientDepsMap);
 
   const serverManifest: ServerManifest = {};
   const serverReferencesMap = new Map();
   const clientReferencesMap = new Map();
-  const serverRoutes = await Bun.build({
+  const server = await Bun.build({
     entrypoints: [
       ...entrypoints,
-      ...Array.from(clientDependencies.values()).map((dep) => dep.entrypoint),
+      ...Array.from(serverDependencies.values()).map((dep) => dep.entrypoint),
     ],
     target: "bun",
     sourcemap: "external",
@@ -112,8 +93,8 @@ export const bundle = async ({
     ],
   });
 
-  if (!serverRoutes.success) {
-    console.error(serverRoutes.logs);
+  if (!server.success) {
+    console.error(server.logs);
     throw new Error("server routes build failed");
   }
 
@@ -123,9 +104,10 @@ export const bundle = async ({
       ...Array.from(clientDependencies.values()).map((dep) => dep.entrypoint),
     ],
     target: "browser",
-    sourcemap: "none",
+    sourcemap: "external",
     splitting: true,
     format: "esm",
+    root: commonDirPath,
     outdir: path.join(outPath, "client"),
     minify: !noMinify,
     publicPath: "./",
@@ -174,9 +156,14 @@ type ResolveClientComponentDependenciesParameters = {
   processedFiles?: Set<string>;
   originalEntry?: string | undefined;
   depth?: number;
+  client: boolean;
 };
 
-const resolveClientComponentDependencies = async ({
+function isClientComponent(code: string) {
+  return code.startsWith('"use client"') || code.startsWith("'use client'");
+}
+
+const resolveComponentDependencies = async ({
   entrypoints,
   ignoredClientDependencies,
   clientDependencies = new Set(),
@@ -184,6 +171,7 @@ const resolveClientComponentDependencies = async ({
   processedFiles = new Set(),
   originalEntry = undefined,
   depth = 0,
+  client = true,
 }: ResolveClientComponentDependenciesParameters) => {
   if (depth > 25) {
     console.warn(
@@ -205,7 +193,10 @@ const resolveClientComponentDependencies = async ({
     const contents = await file.text();
     const dependencyScan = transpiler.scan(contents);
 
-    clientDependencies.add({ entrypoint, exports: dependencyScan.exports });
+    if (client ? isClientComponent(contents) : true) {
+      clientDependencies.add({ entrypoint, exports: dependencyScan.exports });
+    }
+
     processedFiles.add(entrypoint);
 
     const parent = entrypoint.split("/").slice(0, -1).join("/");
@@ -229,7 +220,7 @@ const resolveClientComponentDependencies = async ({
     ) as string[];
 
     if (dependencies.length) {
-      await resolveClientComponentDependencies({
+      await resolveComponentDependencies({
         entrypoints: dependencies,
         ignoredClientDependencies,
         clientDependencies,
@@ -237,6 +228,7 @@ const resolveClientComponentDependencies = async ({
         processedFiles,
         originalEntry: entryKey,
         depth: depth + 1,
+        client,
       });
     }
   }

@@ -46,7 +46,6 @@ export const createApplication = ({
           const file = fileCache.has(url.pathname)
             ? fileCache.get(url.pathname)
             : Bun.file(path.join(publicDirectory, url.pathname));
-          console.log(path.join(publicDirectory, url.pathname));
           if (file) {
             fileCache.set(url.pathname, file);
             return new Response(file);

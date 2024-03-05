@@ -35,7 +35,6 @@ export default function Router() {
     content = createFromFetch(
       fetch(`/__dynasty__?location=${encodeURIComponent(location)}`),
     );
-    console.log(content);
     cache.set(location, content);
   }
 

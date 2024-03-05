@@ -110,8 +110,14 @@ export class ServerPlugin {
             const exportedClientReferences: t.ExportNamedDeclaration[] = [];
 
             for (const { exportName } of exportedFunctions) {
-              const id = `${path.relative(
-                process.cwd(),
+              const cwdMinusOne = process
+                .cwd()
+                .split(path.sep)
+                .slice(0, -1)
+                .join(path.sep);
+
+              const id = `/${path.relative(
+                cwdMinusOne,
                 args.path,
               )}#${exportName}`;
               clientReferences.push({ id, exportName });
@@ -121,9 +127,14 @@ export class ServerPlugin {
                 createExportedClientReference(id, exportName),
               );
 
+              const fileName = `/${path
+                .relative(cwdMinusOne, args.path)
+                .replace(".tsx", ".js")
+                .replace(".ts", ".js")}`;
+
               this.clientManifest[id] = {
-                id: path.relative(process.cwd(), args.path),
-                chunks: [],
+                id: fileName,
+                chunks: [fileName],
                 name: exportName,
               };
             }
