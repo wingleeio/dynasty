@@ -9,5 +9,5 @@ Dynasty is a React Server Component (RSC) framework that aims to provide all the
 - [x] React server components
 - [x] Server-side rendering
 - [x] Server actions
-- [ ] Elysia back end
+- [ ] Elysia backend
 - [ ] Helps you find a girlfriend

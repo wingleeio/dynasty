@@ -16,6 +16,7 @@ export const handleServerAction = async (
   const body = contentType?.startsWith("multipart/form-data")
     ? await req.formData()
     : await req.text();
+
   const serverReference = serverManifest[rscAction];
   const root = path.resolve(__dirname, process.cwd());
   const modulePath = path.join(
@@ -26,7 +27,8 @@ export const handleServerAction = async (
   const module = await import(modulePath);
   const action = module[serverReference.name];
 
-  const args = decodeReply(body);
+  const args = await decodeReply(body);
+
   const actionPromise = action.apply(null, args);
 
   const pipeableStream = renderToPipeableStream(actionPromise, clientManifest);
